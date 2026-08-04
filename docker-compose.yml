@@ -1,6 +1,6 @@
 services:
   octo-fiesta:
-    image: ghcr.io/v1ck3s/octo-fiesta
+    image: ghcr.io/shk2f/octo-fiesta-yt:dev
     container_name: octo-fiesta
     restart: unless-stopped
     ports:
@@ -19,8 +19,8 @@ services:
       - Subsonic__AdminUsername=${SUBSONIC_ADMIN_USERNAME:-}
       # Admin Password to perform actions on navidrome server that require admin permissions (optional)
       - Subsonic__AdminPassword=${SUBSONIC_ADMIN_PASSWORD:-}
-      # Music service to use: Deezer, Qobuz, or SquidWTF (default: SquidWTF)
-      - Subsonic__MusicService=${MUSIC_SERVICE:-SquidWTF}
+      # Music service to use: Qobuz, Yandex, YouTube, or JioSaavn (default: JioSaavn)
+      - Subsonic__MusicService=${MUSIC_SERVICE:-JioSaavn}
       # Storage mode: Permanent (saved to library), Cache (temporary, auto-cleanup)
       - Subsonic__StorageMode=${STORAGE_MODE:-Permanent}
       # Cache duration in hours when StorageMode=Cache (default: 1)
@@ -35,17 +35,12 @@ services:
       - Subsonic__DownloadMode=${DOWNLOAD_MODE:-Track}
       # Auto upgrade quality: re-download tracks when higher quality is available (default: false)
       - Subsonic__AutoUpgradeQuality=${AUTO_UPGRADE_QUALITY:-false}
+      # Disable triggering a library scan after a download completes (default: false)
+      # Useful if your Subsonic server or an external automation already picks up new files
+      - Subsonic__DisableLibraryScan=${DISABLE_LIBRARY_SCAN:-false}
       # Folder template for organizing downloaded files (default: {artist}/{album}/{track} - {title})
       # Available placeholders: {artist}, {album}, {title}, {track}, {disc}, {year}, {genre}, {quality}
       - Subsonic__FolderTemplate=${FOLDER_TEMPLATE}
-      
-      # ===== DEEZER SETTINGS =====
-      # Deezer ARL token (required if using Deezer)
-      - Deezer__Arl=${DEEZER_ARL:-}
-      # Fallback ARL token (optional)
-      - Deezer__ArlFallback=${DEEZER_ARL_FALLBACK:-}
-      # Preferred audio quality: FLAC, MP3_320, MP3_128 (optional, defaults to highest available)
-      - Deezer__Quality=${DEEZER_QUALITY:-}
       
       # ===== QOBUZ SETTINGS =====
       # Qobuz user authentication token (required if using Qobuz)
@@ -54,25 +49,6 @@ services:
       - Qobuz__UserId=${QOBUZ_USER_ID:-}
       # Preferred audio quality: FLAC, FLAC_24_HIGH, FLAC_24_LOW, FLAC_16, MP3_320 (optional)
       - Qobuz__Quality=${QOBUZ_QUALITY:-}
-      
-      # ===== SQUIDWTF SETTINGS =====
-      # Backend source: Qobuz or Tidal (default: Qobuz)
-      - SquidWTF__Source=${SQUIDWTF_SOURCE:-Qobuz}
-      # Preferred audio quality (optional)
-      # Qobuz: 27 (FLAC 24-bit/192kHz), 7 (FLAC 24-bit/96kHz), 6 (FLAC 16-bit/44kHz), 5 (MP3 320kbps)
-      # Tidal: HI_RES_LOSSLESS (FLAC 24-bit/192kHz), LOSSLESS (FLAC 16-bit/44kHz), HIGH (AAC 320kbps), LOW (AAC 96kbps)
-      - SquidWTF__Quality=${SQUIDWTF_QUALITY:-}
-      # Instance timeout in seconds for Tidal backend (default: 5)
-      # Switches to next instance if current one doesn't respond in time
-      - SquidWTF__InstanceTimeoutSeconds=${SQUIDWTF_INSTANCE_TIMEOUT:-5}
-      # Force a specific Tidal API instance (e.g. a self-hosted hifi-api). When set,
-      # the remote instances.json is NOT fetched — only this URL is used.
-      # For multiple custom instances, use SquidWTF__Instances__0, __1, ... directly
-      # instead of this variable.
-      - SquidWTF__Instances__0=${SQUIDWTF_INSTANCE:-}
-      # Override URL of the remote instances.json (ignored if SQUIDWTF_INSTANCE is set).
-      # Defaults to https://tidal-uptime.geeked.wtf/ if empty.
-      - SquidWTF__InstancesUrl=${SQUIDWTF_INSTANCES_URL:-}
 
       # ===== YANDEX MUSIC SETTINGS =====
       # OAuth token for API access.
@@ -93,5 +69,21 @@ services:
       # Default: false
       # Available: true, false
       - Yandex__IncludeUnavailable=${YANDEX_INCLUDE_UNAVAILABLE_TRACKS:-false}
+
+      # ===== YOUTUBE SETTINGS =====
+      # Enable YouTube provider (default: true)
+      - YouTube__Enabled=${YOUTUBE_ENABLED:-true}
+      # yt-dlp binary path inside container
+      - YouTube__YtDlpPath=${YOUTUBE_YTDLP_PATH:-/usr/local/bin/yt-dlp}
+      # Maximum number of YouTube search hits to return (default: 10)
+      - YouTube__MaxResults=${YOUTUBE_MAX_RESULTS:-10}
+      # Preferred YouTube audio format (default: m4a)
+      - YouTube__AudioFormat=${YOUTUBE_AUDIO_FORMAT:-m4a}
+      # Optional cookies file path for authenticated/age-restricted content
+      - YouTube__CookiesPath=${YOUTUBE_COOKIES_PATH:-}
+
+      # ===== JIOSAAVN SETTINGS =====
+      # Preferred JioSaavn quality: 96, 160, or 320 (default: 320)
+      - JioSaavn__Quality=${JIOSAAVN_QUALITY:-320}
     volumes:
       - ${DOWNLOAD_PATH:-./downloads}:/app/downloads

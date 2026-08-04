@@ -15,6 +15,14 @@ public interface ILocalLibraryService
     /// Checks if an external song already exists locally
     /// </summary>
     Task<string?> GetLocalPathForExternalSongAsync(string externalProvider, string externalId);
+
+    /// <summary>
+    /// Download-path resolver: our own download mapping first, then a live Subsonic library
+    /// search (a different release, or a file moved into the library by an external tool).
+    /// Hits the network (search3), so it is deliberately separate from the mapping-only
+    /// <see cref="GetLocalPathForExternalSongAsync"/> that per-track callers use.
+    /// </summary>
+    Task<string?> GetOwnedLibraryPathAsync(string externalProvider, string externalId);
     
     /// <summary>
     /// Registers a downloaded song in the local library
@@ -43,7 +51,7 @@ public interface ILocalLibraryService
     
     /// <summary>
     /// Parses an external ID to extract the provider, type and ID
-    /// Format: ext-{provider}-{type}-{id} (e.g., ext-deezer-artist-259, ext-deezer-album-96126, ext-deezer-song-12345)
+    /// Format: ext-{provider}-{type}-{id} (e.g., ext-qobuz-artist-259, ext-qobuz-album-96126, ext-qobuz-song-12345)
     /// Also supports legacy format: ext-{provider}-{id} (assumes song type)
     /// </summary>
     (bool isExternal, string? provider, string? type, string? externalId) ParseExternalId(string id);

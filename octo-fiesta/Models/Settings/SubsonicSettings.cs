@@ -18,7 +18,7 @@ public enum DownloadMode
 }
 
 /// <summary>
-/// Explicit content filter mode for Deezer tracks
+/// Explicit content filter mode, based on providers that expose an explicit-content flag
 /// </summary>
 public enum ExplicitFilter
 {
@@ -63,24 +63,24 @@ public enum StorageMode
 public enum MusicService
 {
     /// <summary>
-    /// Deezer music service
-    /// </summary>
-    Deezer,
-    
-    /// <summary>
     /// Qobuz music service
     /// </summary>
     Qobuz,
-    
-    /// <summary>
-    /// SquidWTF music service (supports Qobuz and Tidal backends)
-    /// </summary>
-    SquidWTF,
 
     /// <summary>
     /// Yandex music service
     /// </summary>
-    Yandex
+    Yandex,
+
+    /// <summary>
+    /// YouTube music service
+    /// </summary>
+    YouTube,
+
+    /// <summary>
+    /// JioSaavn music service
+    /// </summary>
+    JioSaavn
 }
 
 public class SubsonicSettings
@@ -109,7 +109,7 @@ public class SubsonicSettings
     /// Explicit content filter mode (default: All)
     /// Environment variable: EXPLICIT_FILTER
     /// Values: "All", "ExplicitOnly", "CleanOnly"
-    /// Note: Only works with Deezer
+    /// Note: Only works with providers that expose an explicit-content flag (currently Yandex)
     /// </summary>
     public ExplicitFilter ExplicitFilter { get; set; } = ExplicitFilter.All;
     
@@ -121,11 +121,11 @@ public class SubsonicSettings
     public DownloadMode DownloadMode { get; set; } = DownloadMode.Track;
     
     /// <summary>
-    /// Music service to use (default: SquidWTF)
+    /// Music service to use (default: JioSaavn)
     /// Environment variable: MUSIC_SERVICE
-    /// Values: "Deezer", "Qobuz", "SquidWTF"
+    /// Values: "JioSaavn", "Qobuz", "Yandex", "YouTube"
     /// </summary>
-    public MusicService MusicService { get; set; } = MusicService.SquidWTF;
+    public MusicService MusicService { get; set; } = MusicService.JioSaavn;
     
     /// <summary>
     /// Storage mode for downloaded files (default: Permanent)
@@ -173,4 +173,12 @@ public class SubsonicSettings
     /// Slashes (/) separate folder levels; the last segment becomes the file name.
     /// </summary>
     public string FolderTemplate { get; set; } = "{artist}/{album}/{track} - {title}";
+
+    /// <summary>
+    /// Disable triggering a Subsonic library scan after a download completes (default: false)
+    /// Environment variable: DISABLE_LIBRARY_SCAN
+    /// Useful when the Subsonic server picks up new files on its own or through an external
+    /// automation, avoiding costly full library scans (e.g. Plex via Plexsonic).
+    /// </summary>
+    public bool DisableLibraryScan { get; set; } = false;
 }
