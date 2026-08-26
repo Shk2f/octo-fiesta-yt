@@ -21,6 +21,10 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddHttpContextAccessor();
 
+// Shared in-memory cache. Used to memoize yt-dlp-backed YouTube metadata/search lookups so a
+// burst of getAlbum/getArtist enrichment calls doesn't re-shell-out for the same data.
+builder.Services.AddMemoryCache();
+
 // Exception handling
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
