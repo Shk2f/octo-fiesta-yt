@@ -167,8 +167,15 @@ public class SubsonicProxyService
         var incomingRequest = httpContext.Request;
         var outgoingResponse = httpContext.Response;
 
-        var query = string.Join("&", parameters.Select(kv =>
-            $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value)}"));
+        // Drop estimateContentLength: when the upstream transcodes on the fly it sets
+        // Content-Length to a bitrate*duration estimate, and if the real output is
+        // larger (common when the source bitrate metadata is missing) the response is
+        // truncated with "wrote more than the declared Content-Length". Letting the
+        // upstream stream chunked instead is correct for on-the-fly transcodes and
+        // does not affect direct file serves.
+        var query = string.Join("&", parameters
+            .Where(kv => !kv.Key.Equals("estimateContentLength", StringComparison.OrdinalIgnoreCase))
+            .Select(kv => $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value)}"));
         var url = $"{_subsonicSettings.Url}/rest/stream?{query}";
 
         using var request = new HttpRequestMessage(HttpMethod.Get, url);

@@ -372,6 +372,41 @@ public class SubsonicProxyServiceTests
     }
 
     [Fact]
+    public async Task RelayStreamAsync_StripsEstimateContentLengthFromUpstreamQuery()
+    {
+        // Arrange
+        HttpRequestMessage? capturedRequest = null;
+        var responseMessage = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(new byte[] { 1, 2, 3 })
+        };
+        responseMessage.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("audio/ogg");
+
+        _mockHttpMessageHandler.Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>((req, _) => capturedRequest = req)
+            .ReturnsAsync(responseMessage);
+
+        var parameters = new Dictionary<string, string>
+        {
+            { "id", "song123" },
+            { "format", "opus" },
+            { "estimateContentLength", "true" }
+        };
+
+        // Act
+        await _service.RelayStreamAsync(parameters, CancellationToken.None);
+
+        // Assert
+        Assert.NotNull(capturedRequest);
+        var query = capturedRequest!.RequestUri!.Query;
+        Assert.DoesNotContain("estimateContentLength", query, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("format=opus", query);
+    }
+
+    [Fact]
     public async Task RelayStreamAsync_WithIfRangeHeader_ForwardsIfRangeToUpstream()
     {
         // Arrange
