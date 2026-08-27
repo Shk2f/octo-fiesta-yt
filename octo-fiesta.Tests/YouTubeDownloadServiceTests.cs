@@ -68,6 +68,7 @@ public class YouTubeDownloadServiceTests : IDisposable
             .Setup(r => r.ExecuteAsync(
                 It.IsAny<string>(),
                 It.Is<IReadOnlyList<string>>(args => args.Contains("--output")),
+                It.IsAny<TimeSpan>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
@@ -121,7 +122,7 @@ public class YouTubeDownloadServiceTests : IDisposable
     {
         var trackId = "regressionTest3";
         _runnerMock
-            .Setup(r => r.ExecuteAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.ExecuteAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new YtDlp.ExecutionResult(1, "", "video unavailable"));
         var service = CreateService();
         var song = new Song { Title = "Some Title", ExternalId = trackId };
@@ -146,6 +147,7 @@ public class YouTubeDownloadServiceTests : IDisposable
         _runnerMock.Verify(r => r.ExecuteAsync(
             It.IsAny<string>(),
             It.Is<IReadOnlyList<string>>(args => args.Contains("--cookies") && args.Contains(cookiesPath)),
+            It.IsAny<TimeSpan>(),
             It.IsAny<CancellationToken>()),
             Times.Once);
     }

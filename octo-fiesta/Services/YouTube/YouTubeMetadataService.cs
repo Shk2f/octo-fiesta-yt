@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using octo_fiesta.Models.Domain;
 using octo_fiesta.Models.Search;
@@ -11,19 +12,33 @@ public class YouTubeMetadataService : IMusicMetadataService
 {
     private const string ProviderName = "youtube";
     private const string AlbumPrefix = "ext-youtube-album-";
+
+    // Every metadata/search lookup here costs a yt-dlp subprocess. A Subsonic client browsing
+    // the library or re-syncing favourites re-requests the same albums/artists in tight bursts,
+    // so memoizing the two primitives every other method composes from (the "Songs" ID search
+    // and the per-video resolve) collapses that burst to a handful of processes. TTLs are short
+    // enough that genuinely new uploads still show up within a browsing session; a miss ("no
+    // results" / "video unavailable") is cached briefly so it can recover without hammering.
+    private static readonly TimeSpan SearchCacheTtl = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan SongCacheTtl = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan NegativeCacheTtl = TimeSpan.FromMinutes(2);
+
     private readonly ILogger<YouTubeMetadataService> _logger;
     private readonly YouTubeSettings _settings;
     private readonly IYtDlpProcessRunner _processRunner;
+    private readonly IMemoryCache _cache;
     private readonly Dictionary<string, string> _artistNameByExternalId = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _artistLock = new();
 
     public YouTubeMetadataService(
         IOptions<YouTubeSettings> youtubeSettings,
         IYtDlpProcessRunner processRunner,
+        IMemoryCache cache,
         ILogger<YouTubeMetadataService> logger)
     {
         _settings = youtubeSettings.Value;
         _processRunner = processRunner;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -81,6 +96,19 @@ public class YouTubeMetadataService : IMusicMetadataService
     /// or thumbnail - so this is used purely as an allowlist, not as the song source itself.
     /// </summary>
     private async Task<List<string>> GetYouTubeMusicSongIdsAsync(string query, int limit)
+    {
+        var cacheKey = $"yt:songids:{limit}:{query}";
+        if (_cache.TryGetValue(cacheKey, out List<string>? cached) && cached is not null)
+        {
+            return cached;
+        }
+
+        var ids = await GetYouTubeMusicSongIdsUncachedAsync(query, limit);
+        _cache.Set(cacheKey, ids, ids.Count > 0 ? SearchCacheTtl : NegativeCacheTtl);
+        return ids;
+    }
+
+    private async Task<List<string>> GetYouTubeMusicSongIdsUncachedAsync(string query, int limit)
     {
         var searchUrl = $"https://music.youtube.com/search?q={Uri.EscapeDataString(query)}#songs";
         var args = new List<string>
@@ -219,6 +247,26 @@ public class YouTubeMetadataService : IMusicMetadataService
             return null;
         }
 
+        // Cache the raw yt-dlp JSON, not the mapped Song: callers (e.g. permanentization) mutate
+        // the Song they get back, so each call must map a fresh instance. Mapping is pure CPU.
+        var json = await GetVideoJsonAsync(externalId);
+        if (string.IsNullOrEmpty(json))
+        {
+            return null;
+        }
+
+        using var doc = JsonDocument.Parse(json);
+        return MapEntryToSong(doc.RootElement, externalId);
+    }
+
+    private async Task<string?> GetVideoJsonAsync(string externalId)
+    {
+        var cacheKey = $"yt:videojson:{externalId}";
+        if (_cache.TryGetValue(cacheKey, out string? cached))
+        {
+            return cached;
+        }
+
         var args = new List<string>
         {
             "--dump-single-json",
@@ -234,11 +282,13 @@ public class YouTubeMetadataService : IMusicMetadataService
         if (result.ExitCode != 0)
         {
             _logger.LogWarning("YouTube metadata resolve failed for {ExternalId}. stderr: {Error}", externalId, result.StandardError);
+            // Cache the miss (empty string) briefly so a browse pass doesn't re-spawn yt-dlp per item.
+            _cache.Set(cacheKey, string.Empty, NegativeCacheTtl);
             return null;
         }
 
-        using var doc = JsonDocument.Parse(result.StandardOutput);
-        return MapEntryToSong(doc.RootElement, externalId);
+        _cache.Set(cacheKey, result.StandardOutput, SongCacheTtl);
+        return result.StandardOutput;
     }
 
     public async Task<Album?> GetAlbumAsync(string externalProvider, string externalId)

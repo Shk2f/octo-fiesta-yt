@@ -3,6 +3,12 @@ services:
     image: ghcr.io/shk2f/octo-fiesta-yt:dev
     container_name: octo-fiesta
     restart: unless-stopped
+    # Safety net: even with the app-level yt-dlp concurrency cap, keep a hard ceiling so a
+    # runaway can never take the host down - it gets cgroup-OOM-killed and restarted instead.
+    # Tune to your host; needs to comfortably fit the .NET runtime + a few yt-dlp processes.
+    mem_limit: ${OCTO_FIESTA_MEM_LIMIT:-1500m}
+    memswap_limit: ${OCTO_FIESTA_MEM_LIMIT:-1500m}
+    pids_limit: 512
     ports:
       - "5274:${INTERNAL_PORT:-8080}"
     environment:
@@ -81,6 +87,16 @@ services:
       - YouTube__AudioFormat=${YOUTUBE_AUDIO_FORMAT:-m4a}
       # Optional cookies file path for authenticated/age-restricted content
       - YouTube__CookiesPath=${YOUTUBE_COOKIES_PATH:-}
+      # Max yt-dlp processes allowed to run at once, app-wide (default: 4). Each search/metadata
+      # lookup shells out to yt-dlp; this ceiling stops a burst of library-browse or
+      # favourites-sync requests from spawning enough processes to exhaust RAM + swap.
+      - YouTube__MaxConcurrentProcesses=${YOUTUBE_MAX_CONCURRENT_PROCESSES:-4}
+      # Hard timeout (seconds) for a single yt-dlp metadata/search call (default: 120)
+      - YouTube__ProcessTimeoutSeconds=${YOUTUBE_PROCESS_TIMEOUT_SECONDS:-120}
+      # Hard timeout (seconds) for a single yt-dlp track download (default: 600)
+      - YouTube__DownloadTimeoutSeconds=${YOUTUBE_DOWNLOAD_TIMEOUT_SECONDS:-600}
+      # How long (seconds) a queued yt-dlp call waits for a free slot before giving up (default: 45)
+      - YouTube__ProcessQueueTimeoutSeconds=${YOUTUBE_PROCESS_QUEUE_TIMEOUT_SECONDS:-45}
 
       # ===== JIOSAAVN SETTINGS =====
       # Preferred JioSaavn quality: 96, 160, or 320 (default: 320)

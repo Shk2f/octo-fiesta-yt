@@ -36,6 +36,12 @@ public abstract class BaseDownloadService : IDownloadService
     // Key: "{provider}|{externalId}" -> (path or null, expiry)
     private readonly ConcurrentDictionary<string, (string? Path, DateTime Expiry)> _metadataPathCache = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _metadataPathLocks = new();
+
+    // Artist external IDs with a discography download currently running. Starring an artist (or a
+    // favourites re-sync that re-stars them) can fire this repeatedly; each run enumerates the
+    // artist's albums and every track, so without a guard the duplicates stack into a yt-dlp
+    // stampede. Keyed by "{provider}|{artistExternalId}".
+    private readonly ConcurrentDictionary<string, byte> _inFlightDiscographyDownloads = new();
     private static readonly TimeSpan MetadataCacheTtl = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan MetadataCacheNegativeTtl = TimeSpan.FromMinutes(1);
     private readonly IHttpClientFactory _httpClientFactory;
@@ -233,6 +239,13 @@ public abstract class BaseDownloadService : IDownloadService
             return;
         }
 
+        var guardKey = $"{externalProvider}|{artistExternalId}";
+        if (!_inFlightDiscographyDownloads.TryAdd(guardKey, 0))
+        {
+            Logger.LogInformation("Discography download for artist {ArtistId} is already running, skipping duplicate trigger", artistExternalId);
+            return;
+        }
+
         _ = Task.Run(async () =>
         {
             try
@@ -242,6 +255,10 @@ public abstract class BaseDownloadService : IDownloadService
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Failed to download discography for artist {ArtistId}", artistExternalId);
+            }
+            finally
+            {
+                _inFlightDiscographyDownloads.TryRemove(guardKey, out _);
             }
         });
     }

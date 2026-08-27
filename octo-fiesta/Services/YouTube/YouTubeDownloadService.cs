@@ -80,7 +80,8 @@ public class YouTubeDownloadService : BaseDownloadService
         }
 
         _logger.LogInformation("YouTube download started: trackId={TrackId}, title='{Title}'", trackId, song.Title);
-        var result = await _processRunner.ExecuteAsync(_settings.YtDlpPath, args, cancellationToken);
+        var downloadTimeout = TimeSpan.FromSeconds(Math.Max(30, _settings.DownloadTimeoutSeconds));
+        var result = await _processRunner.ExecuteAsync(_settings.YtDlpPath, args, downloadTimeout, cancellationToken);
         if (result.ExitCode != 0)
         {
             _logger.LogError("YouTube download failed: trackId={TrackId}, stderr={Error}", trackId, result.StandardError);

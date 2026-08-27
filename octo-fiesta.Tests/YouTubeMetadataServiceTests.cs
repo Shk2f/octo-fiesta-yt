@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -20,12 +21,14 @@ public class YouTubeMetadataServiceTests
 {
     private readonly Mock<IYtDlpProcessRunner> _runnerMock = new();
     private readonly Mock<ILogger<YouTubeMetadataService>> _loggerMock = new();
+    private readonly IMemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
 
     private YouTubeMetadataService CreateService(YouTubeSettings? settings = null)
     {
         return new YouTubeMetadataService(
             Options.Create(settings ?? new YouTubeSettings { YtDlpPath = "yt-dlp" }),
             _runnerMock.Object,
+            _cache,
             _loggerMock.Object);
     }
 
@@ -183,6 +186,48 @@ public class YouTubeMetadataServiceTests
 
         var song = Assert.Single(songs);
         Assert.Equal("id2", song.ExternalId);
+    }
+
+    [Fact]
+    public async Task SearchSongsAsync_SecondIdenticalCall_IsServedFromCache_WithoutReinvokingYtDlp()
+    {
+        SetupRunner("music.youtube.com/search", 0, SongsSearchJson(("id1", "Song One")));
+        SetupRunner("watch?v=id1", 0, VideoInfoJson("id1", "Song One", "Artist", "UC1"));
+        var service = CreateService();
+
+        var first = await service.SearchSongsAsync("repeated query");
+        var second = await service.SearchSongsAsync("repeated query");
+
+        Assert.Single(first);
+        Assert.Single(second);
+
+        // Both the "Songs" ID search and the per-video resolve are memoized.
+        _runnerMock.Verify(r => r.ExecuteAsync(
+            It.IsAny<string>(),
+            It.Is<IReadOnlyList<string>>(args => ArgsContain(args, "music.youtube.com/search")),
+            It.IsAny<CancellationToken>()),
+            Times.Once);
+        _runnerMock.Verify(r => r.ExecuteAsync(
+            It.IsAny<string>(),
+            It.Is<IReadOnlyList<string>>(args => ArgsContain(args, "watch?v=id1")),
+            It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetSongAsync_SecondCallForSameId_IsServedFromCache()
+    {
+        SetupRunner("watch?v=id1", 0, VideoInfoJson("id1", "A Song", "Some Channel", "UCabc"));
+        var service = CreateService();
+
+        await service.GetSongAsync("youtube", "id1");
+        await service.GetSongAsync("youtube", "id1");
+
+        _runnerMock.Verify(r => r.ExecuteAsync(
+            It.IsAny<string>(),
+            It.Is<IReadOnlyList<string>>(args => ArgsContain(args, "watch?v=id1")),
+            It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
