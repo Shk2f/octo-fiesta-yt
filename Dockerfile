@@ -27,6 +27,13 @@ EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080
 
 RUN apt-get update && apt-get install -y python3 ffmpeg curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# GHA layer caching (see docker.yml) would otherwise reuse this layer forever, since the
+# curl command line never changes even though "latest" does — YTDLP_CACHEBUST is passed a
+# fresh value on every workflow run to force yt-dlp to be re-downloaded each build.
+ARG YTDLP_CACHEBUST=1
+RUN echo "yt-dlp cachebust: ${YTDLP_CACHEBUST}" \
     && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
     && chmod a+rx /usr/local/bin/yt-dlp
 
